@@ -11,20 +11,34 @@ A portable tool that lets agents search through a catalog of SKILL.md files and 
 
 The tool has two modes:
 
-1. **MCP Server** — for Claude Code, Cursor, Codex, or any MCP-capable agent. Exposes `skill_search`, `skill_view`, and `skill_list` as tools.
+1. **MCP Server** — for Claude Code, Claude Desktop, Codex, Gemini CLI, OpenClaw, Hermes, pi, or any MCP-capable agent. Exposes `skill_search`, `skill_view`, and `skill_list` as tools.
 2. **CLI** — for any agent. Run `skill-search search <query>` to find skills, `skill-search view <name>` to load one.
 
 ## Setup
 
-### Option A: MCP Server (recommended for Claude Code / Cursor)
+Install the package first (distribution name is `agent-skill-search`):
 
-Add to your MCP config (e.g. `~/.claude/mcp.json` or Cursor settings):
+```bash
+uv tool install agent-skill-search
+# or: pip install agent-skill-search
+```
+
+### Option A: MCP Server (recommended)
+
+One command per client:
+
+```bash
+skill-search install claude-code   # or codex / gemini / openclaw / hermes / pi / claude-desktop
+```
+
+Manual fallback for any `mcpServers`-style JSON config:
 
 ```json
 {
   "mcpServers": {
     "skill-search": {
-      "command": "skill-search-mcp",
+      "command": "/absolute/path/to/skill-search-mcp",
+      "args": [],
       "env": {
         "SKILL_CATALOG_DIRS": "/path/to/your/skills:/path/to/more/skills"
       }
@@ -33,14 +47,14 @@ Add to your MCP config (e.g. `~/.claude/mcp.json` or Cursor settings):
 }
 ```
 
-Or with `uvx`:
+Or with `uvx` (note the `--from`, since the distribution is `agent-skill-search`):
 
 ```json
 {
   "mcpServers": {
     "skill-search": {
       "command": "uvx",
-      "args": ["skill-search-mcp"],
+      "args": ["--from", "agent-skill-search", "skill-search-mcp"],
       "env": {
         "SKILL_CATALOG_DIRS": "~/.hermes/skills:~/.agents/skills"
       }
@@ -49,13 +63,15 @@ Or with `uvx`:
 }
 ```
 
+Full per-client instructions, the ChatGPT remote-HTTP setup, and troubleshooting:
+**[INSTALL.md](INSTALL.md)**.
+
 ### Option B: CLI (any agent)
 
 ```bash
-pip install skill-search
-# or: uv pip install skill-search
+pip install agent-skill-search
 
-# Set your catalog directories
+# Set your catalog directories (colon-separated)
 export SKILL_CATALOG_DIRS="$HOME/.hermes/skills:$HOME/.agents/skills"
 
 # Search
@@ -76,6 +92,12 @@ pip install -e .
 export SKILL_CATALOG_DIRS="."
 skill-search list
 ```
+
+## Catalog management
+
+`skill-search add <dir>` **moves** skill directories out of the source tree into
+`~/.agents/skills-catalog` — it does not copy them. The originals will no longer be in
+place for the tool they came from.
 
 ## Usage Pattern for Agents
 
