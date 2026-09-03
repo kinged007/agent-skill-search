@@ -21,6 +21,9 @@ export SKILL_CATALOG_DIRS="$HOME/.hermes/skills"
 skill-search search "react performance"
 skill-search view "vercel-react-best-practices"
 skill-search list
+
+# Move skills from a source dir into the catalog (frees agent context)
+skill-search add ~/.hermes/skills
 ```
 
 ### MCP Server
