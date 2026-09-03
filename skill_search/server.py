@@ -5,12 +5,15 @@ Universal skill search tool. Exposes three tools:
   - skill_search(query) — grep-like search, returns skill name + description
   - skill_view(name) — load full skill content
   - skill_list() — list all skills
+
+Transports: stdio (default) or streamable HTTP (--http, for ChatGPT connectors).
 """
 
 import os
 import sys
 import json
 import asyncio
+import argparse
 from typing import Optional
 
 try:
@@ -20,11 +23,12 @@ try:
 except ImportError:
     print(
         "Error: 'mcp' package not installed.\n"
-        "Install with: pip install 'mcp[cli]'",
+        "Install with: pip install 'agent-skill-search'",
         file=sys.stderr,
     )
     sys.exit(1)
 
+from . import __version__
 from .engine import build_index, SkillIndex
 
 
@@ -32,7 +36,6 @@ from .engine import build_index, SkillIndex
 
 DEFAULT_CATALOG = "~/.agents/skills-catalog"
 LOCAL_CATALOG = "./.agents/skills-catalog"
-
 
 def get_catalog_dirs() -> list[str]:
     """Resolve catalog directories from env or defaults."""
@@ -50,9 +53,8 @@ def get_catalog_dirs() -> list[str]:
 
 # ── Server ──────────────────────────────────────────────────────────────────
 
-app = Server("skill-search")
+app = Server("skill-search", version=__version__)
 _index: Optional[SkillIndex] = None
-
 
 def get_index() -> SkillIndex:
     global _index
@@ -127,17 +129,13 @@ TOOL_DEFINITIONS = [
 
 
 # ── Handlers ────────────────────────────────────────────────────────────────
+# SDK 2.x request-handler signature: (ctx, params) -> result.
 
-async def handle_list_tools(
-    request,
-) -> types.ListToolsResult:
+async def handle_list_tools(ctx, params) -> types.ListToolsResult:
     return types.ListToolsResult(tools=TOOL_DEFINITIONS)
 
 
-async def handle_call_tool(
-    request,
-) -> types.CallToolResult:
-    params = request.params
+async def handle_call_tool(ctx, params) -> types.CallToolResult:
     name = params.name
     arguments = params.arguments or {}
     index = get_index()
@@ -202,15 +200,46 @@ app.add_request_handler("tools/list", types.PaginatedRequestParams, handle_list_
 app.add_request_handler("tools/call", types.CallToolRequestParams, handle_call_tool)
 
 
-# ── Entry point ─────────────────────────────────────────────────────────────
+# ── Entry points ────────────────────────────────────────────────────────────
 
 async def main():
     async with stdio_server() as (read_stream, write_stream):
         await app.run(read_stream, write_stream, app.create_initialization_options())
 
 
+LOOPBACK_HOSTS = ("127.0.0.1", "localhost", "::1")
+
+
+def run_http(host: str, port: int) -> None:
+    import uvicorn
+    from mcp.server.transport_security import TransportSecuritySettings
+
+    security = None
+    if host not in LOOPBACK_HOSTS:
+        # ponytail: a non-loopback host is expected to sit behind a reverse
+        # proxy; the proxy owns Host/Origin checks, TLS, and auth (INSTALL.md).
+        security = TransportSecuritySettings(enable_dns_rebinding_protection=False)
+    mcp_app = app.streamable_http_app(
+        json_response=True, stateless_http=True, host=host, transport_security=security
+    )
+    uvicorn.run(mcp_app, host=host, port=port, log_level="info")
+
+
 def run():
-    asyncio.run(main())
+    parser = argparse.ArgumentParser(
+        prog="skill-search-mcp",
+        description="Skill Search MCP server (stdio by default; --http for remote connectors)",
+    )
+    parser.add_argument("--http", action="store_true",
+                        help="Serve over streamable HTTP instead of stdio (for ChatGPT connectors)")
+    parser.add_argument("--host", default="127.0.0.1", help="HTTP bind address (default 127.0.0.1)")
+    parser.add_argument("--port", type=int, default=8787, help="HTTP port (default 8787)")
+    args = parser.parse_args()
+
+    if args.http:
+        run_http(args.host, args.port)
+    else:
+        asyncio.run(main())
 
 
 if __name__ == "__main__":
