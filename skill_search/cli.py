@@ -209,6 +209,17 @@ def main():
     p_add = sub.add_parser("add", help="Move skills from a directory into the catalog")
     p_add.add_argument("source", help="Source skills directory to move from")
 
+    p_install = sub.add_parser("install", help="Install the MCP server into an agent client")
+    p_install.add_argument("client", nargs="*", help="Client id(s) — see --list")
+    p_install.add_argument("--list", action="store_true", help="List known clients")
+    p_install.add_argument("--all", action="store_true", help="Install into every detected client")
+    p_install.add_argument("--dry-run", action="store_true", help="Print what would be done; write nothing")
+    p_install.add_argument("--catalog", action="append", help="Catalog dir (repeatable)")
+
+    p_uninstall = sub.add_parser("uninstall", help="Remove the MCP server from an agent client")
+    p_uninstall.add_argument("client", nargs="*", help="Client id(s) — see install --list")
+    p_uninstall.add_argument("--all", action="store_true", help="Uninstall from every detected client")
+
     args = parser.parse_args()
 
     if args.command == "search":
@@ -219,6 +230,12 @@ def main():
         cmd_list(args)
     elif args.command == "add":
         cmd_add(args)
+    elif args.command == "install":
+        from .install import cmd_install
+        cmd_install(args)
+    elif args.command == "uninstall":
+        from .install import cmd_uninstall
+        cmd_uninstall(args)
     else:
         parser.print_help()
 
