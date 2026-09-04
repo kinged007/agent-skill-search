@@ -21,8 +21,8 @@ skill-search = "skill_search.cli:main"
 skill-search-mcp = "skill_search.server:run"
 
 [project.urls]
-Homepage = "https://github.com/kinged007/skill-search"
-Repository = "https://github.com/kinged007/skill-search"
+Homepage = "https://github.com/kinged007/agent-skill-search"
+Repository = "https://github.com/kinged007/agent-skill-search"
 
 [tool.hatch.build.targets.wheel]
 packages = ["skill_search"]
