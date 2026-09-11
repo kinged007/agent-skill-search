@@ -14,6 +14,7 @@ import subprocess
 from dataclasses import dataclass
 
 from . import clients as cl
+from .engine import existing_known_dirs, include_known_dirs
 from .clients import SERVER_NAME, CLIENTS, Client, get_client, resolve_config_path
 
 DEFAULT_CATALOG = "~/.agents/skills-catalog"
@@ -21,18 +22,24 @@ DEFAULT_CATALOG = "~/.agents/skills-catalog"
 
 # ── Resolution ──────────────────────────────────────────────────────────────
 
-def resolve_catalog_dirs(explicit: list[str] | None) -> list[str]:
+def resolve_catalog_dirs(explicit: list[str] | None, include_known: bool | None = None) -> list[str]:
     """--catalog (repeatable) > SKILL_CATALOG_DIRS env > ~/.agents/skills-catalog.
 
-    Dirs from --catalog or the default are created if missing; env-referenced
-    dirs are not (they belong to other tools).
+    --include-known/--no-include-known (else SKILL_INCLUDE_KNOWN=1) additionally
+    scans well-known agent skills dirs. Dirs from --catalog or the default are
+    created if missing; env-referenced and known dirs are not (other tools own
+    them).
     """
+    if include_known is None:
+        include_known = include_known_dirs()
     if explicit:
         raw, create = list(explicit), True
     else:
         env = os.environ.get("SKILL_CATALOG_DIRS", "")
         raw = env.split(":") if env else [DEFAULT_CATALOG]
         create = not env
+    if include_known:
+        raw = [*raw, *existing_known_dirs()]
 
     out, seen = [], set()
     for d in raw:
@@ -79,7 +86,7 @@ class Target:
 
 def select_targets(client_ids: list[str], all_clients: bool) -> list[Target]:
     if all_clients:
-        chosen = [c for c in CLIENTS if c.id != "chatgpt"]
+        chosen = [c for c in CLIENTS if c.id != "chatgpt" and not (c.use_cwd and all_clients)]
         targets = []
         for c in chosen:
             present = (
@@ -121,7 +128,9 @@ def cmd_install(args) -> None:
         print("Nothing to install.")
         return
 
-    dirs = resolve_catalog_dirs(args.catalog)
+    dirs = resolve_catalog_dirs(args.catalog, getattr(args, "include_known", None))
+    if getattr(args, "cli_hint", False):
+        append_cli_hint(args.dry_run)
     cmd, cmd_args = resolve_server_command()
     if not shutil.which("skill-search-mcp"):
         print("Note: 'skill-search-mcp' not on PATH; writing interpreter command "
@@ -225,10 +234,88 @@ def _backup_path(path: str) -> str:
         n += 1
     return f"{path}.bak-{n}"
 
+# ── CLI hint (for agents without MCP) ───────────────────────────────────────
+
+HINT_MARKER = "<!-- skill-search-cli -->"
+
+HINT_BODY = """## skill-search (CLI)
+
+Search the local skills catalog before writing code or executing tasks:
+
+  skill-search search "<keywords>"   # find relevant skills (name + description)
+  skill-search view <name>           # read the full skill
+  skill-search list                  # list all cataloged skills
+
+Catalog: `~/.agents/skills-catalog` (`SKILL_CATALOG_DIRS` to override).
+"""
+
+HINT_CANDIDATES = (
+    "~/.claude/CLAUDE.md",
+    "~/CLAUDE.md",
+    "~/AGENTS.md",
+    "./CLAUDE.md",
+    "./AGENTS.md",
+)
+
+def hint_targets() -> list[str]:
+    """Existing hint files, deduped by real path. Never creates files."""
+    out, seen = [], set()
+    for raw in HINT_CANDIDATES:
+        p = os.path.expanduser(raw) if raw.startswith("~") else os.path.abspath(raw)
+        if os.path.isfile(p):
+            real = os.path.realpath(p)
+            if real not in seen:
+                seen.add(real)
+                out.append(real)
+    return out
+
+def append_cli_hint(dry_run: bool) -> None:
+    block = HINT_MARKER + "\n" + HINT_BODY
+    targets = hint_targets()
+    if not targets:
+        print("  cli-hint: no CLAUDE.md/AGENTS.md found; nothing to do")
+        return
+    for path in targets:
+        with open(path, "r", encoding="utf-8") as f:
+            content = f.read()
+        if HINT_MARKER in content:
+            print(f"  cli-hint: already present in {path}; skipping")
+            continue
+        if dry_run:
+            print(f"[dry-run] cli-hint: would append to {path}")
+            continue
+        backup = _backup_path(path)
+        shutil.copy2(path, backup)
+        sep = "" if (not content or content.endswith("\n")) else "\n"
+        # Append-only: existing content is never rewritten, only added to.
+        with open(path, "a", encoding="utf-8") as f:
+            f.write(sep + block)
+        print(f"  cli-hint: appended to {path} (backup: {backup})")
+
+def remove_cli_hint() -> None:
+    """Remove our own hint block; leaves edited blocks untouched."""
+    block = HINT_MARKER + "\n" + HINT_BODY
+    for path in hint_targets():
+        with open(path, "r", encoding="utf-8") as f:
+            content = f.read()
+        start = content.find(HINT_MARKER)
+        if start < 0:
+            continue
+        if content[start:start + len(block)] != block:
+            print(f"  cli-hint: {path} has an edited block; leaving it untouched")
+            continue
+        backup = _backup_path(path)
+        shutil.copy2(path, backup)
+        with open(path, "w", encoding="utf-8") as f:
+            f.write(content[:start] + content[start + len(block):])
+        print(f"  cli-hint: removed from {path} (backup: {backup})" )
+
 
 # ── Uninstall ───────────────────────────────────────────────────────────────
 
 def cmd_uninstall(args) -> None:
+    if getattr(args, "cli_hint", False):
+        remove_cli_hint()
     targets = select_targets(args.client or [], args.all)
     if not targets:
         print("Nothing to uninstall.")
@@ -302,7 +389,7 @@ def list_clients() -> None:
         print(f"  {c.id:<16} {c.name:<16} {kind}")
         if c.note:
             print(f"  {'':<16} note: {c.note}")
-    print(f"\nUsage: skill-search install <id> [--dry-run] [--catalog DIR ...] | --all")
+    print(f"\nUsage: skill-search install <id> [--dry-run] [--catalog DIR ...] [--cli-hint] | --all")
 
 
 def print_chatgpt_instructions(dirs, dry_run: bool) -> None:

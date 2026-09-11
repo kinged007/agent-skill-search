@@ -184,12 +184,27 @@ skill-search search "react performance"   # find skills
 skill-search view "react-perf"            # load one
 ```
 
+## CLI usage hint for agents without MCP
+
+Agents without an MCP connection can still call the CLI directly. Opt in with
+`--cli-hint` to append a short usage snippet to existing `CLAUDE.md`/`AGENTS.md`
+files (`~/.claude/CLAUDE.md`, `~/CLAUDE.md`, `~/AGENTS.md`, `./CLAUDE.md`,
+`./AGENTS.md`). Append-only: marker-checked, skipped when already present,
+backed up before the write, never created from scratch. `--dry-run` shows
+what would change. `uninstall --cli-hint` removes the snippet again.
+
+```bash
+skill-search install gemini --cli-hint             # MCP config + hint snippet
+skill-search install gemini --cli-hint --dry-run   # preview both, write nothing
+```
+
 ## Uninstall
 
 ```bash
 skill-search uninstall claude-code    # claude mcp remove
 skill-search uninstall gemini         # removes the JSON entry, keeps a backup
 skill-search uninstall --all          # every detected client
+skill-search uninstall gemini --cli-hint  # also removes the hint snippet
 ```
 
 ## Troubleshooting

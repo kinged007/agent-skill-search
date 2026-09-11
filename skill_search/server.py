@@ -29,7 +29,12 @@ except ImportError:
     sys.exit(1)
 
 from . import __version__
-from .engine import build_index, SkillIndex
+from .engine import (
+    build_index,
+    SkillIndex,
+    existing_known_dirs,
+    include_known_dirs,
+)
 
 
 # ── Config ──────────────────────────────────────────────────────────────────
@@ -38,10 +43,12 @@ DEFAULT_CATALOG = "~/.agents/skills-catalog"
 LOCAL_CATALOG = "./.agents/skills-catalog"
 
 def get_catalog_dirs() -> list[str]:
-    """Resolve catalog directories from env or defaults."""
+    """Resolve catalog directories from env, known locations, or defaults."""
     env = os.environ.get("SKILL_CATALOG_DIRS", "")
     if env:
         dirs = [d.strip() for d in env.split(":") if d.strip()]
+    elif include_known_dirs():
+        dirs = existing_known_dirs()
     else:
         dirs = []
         for d in [DEFAULT_CATALOG, LOCAL_CATALOG]:
@@ -162,7 +169,7 @@ async def handle_call_tool(ctx, params) -> types.CallToolResult:
                 )],
                 isError=False,
             )
-        else:
+        elif skill_name.strip():
             results = index.search(skill_name, limit=1)
             if results:
                 return types.CallToolResult(
@@ -170,7 +177,7 @@ async def handle_call_tool(ctx, params) -> types.CallToolResult:
                         type="text",
                         text=f"Skill '{skill_name}' not found. Did you mean '{results[0]['name']}'?",
                     )],
-                    isError=False,
+                    isError=True,
                 )
             return types.CallToolResult(
                 content=[types.TextContent(

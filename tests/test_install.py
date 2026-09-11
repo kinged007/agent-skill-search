@@ -18,10 +18,10 @@ def _fake_home(tmp_path, monkeypatch):
     return tmp_path
 
 
-def _ns(client=(), all_=False, list_=False, dry_run=False, catalog=None):
+def _ns(client=(), all_=False, list_=False, dry_run=False, catalog=None, cli_hint=False):
     return type("NS", (), {
         "client": list(client), "all": all_, "list": list_,
-        "dry_run": dry_run, "catalog": catalog,
+        "dry_run": dry_run, "catalog": catalog, "cli_hint": cli_hint,
     })()
 
 
@@ -180,6 +180,72 @@ def test_install_list(tmp_path, monkeypatch, capsys):
     for cid in ("claude-code", "codex", "gemini", "claude-desktop", "pi", "chatgpt", "openclaw", "hermes"):
         assert cid in out
 
+
+def test_cli_hint_appends_and_skips_second_run(tmp_path, monkeypatch, capsys):
+    home = _fake_home(tmp_path, monkeypatch)
+    md = home / "CLAUDE.md"
+    md.write_text("# My notes\n\nKeep it short.\n")
+    _fake_which(monkeypatch, {"skill-search-mcp": "/fake/bin/skill-search-mcp"})
+    cat = str(tmp_path / "c")
+
+    inst.cmd_install(_ns(client=("gemini",), catalog=[cat], cli_hint=True))
+    text = md.read_text()
+    assert text.startswith("# My notes\n\nKeep it short.\n")
+    assert text.count("<!-- skill-search-cli -->") == 1
+    assert (home / "CLAUDE.md.bak-1").exists()
+
+    # Second run: content unchanged, no new backup, skipped message
+    backups = list(home.glob("*.bak-*"))
+    inst.cmd_install(_ns(client=("gemini",), catalog=[cat], cli_hint=True))
+    assert md.read_text() == text
+    assert list(home.glob("*.bak-*")) == backups
+    assert "already present" in capsys.readouterr().out
+
+def test_cli_hint_dry_run_writes_nothing(tmp_path, monkeypatch):
+    home = _fake_home(tmp_path, monkeypatch)
+    md = home / "CLAUDE.md"
+    md.write_text("# notes\n")
+    _fake_which(monkeypatch, {"skill-search-mcp": "/fake/bin/skill-search-mcp"})
+    inst.cmd_install(_ns(client=("gemini",), dry_run=True, catalog=[str(tmp_path / "c")], cli_hint=True))
+    assert md.read_text() == "# notes\n"
+    assert not list(home.glob("*.bak-*"))
+    assert not (home / ".gemini").exists()
+
+def test_cli_hint_missing_file_noop(tmp_path, monkeypatch, capsys):
+    _fake_home(tmp_path, monkeypatch)
+    _fake_which(monkeypatch, {"skill-search-mcp": "/fake/bin/skill-search-mcp"})
+    inst.cmd_install(_ns(client=("gemini",), catalog=[str(tmp_path / "c")], cli_hint=True))
+    assert "no CLAUDE.md/AGENTS.md found" in capsys.readouterr().out
+
+def test_cli_hint_not_appended_without_flag(tmp_path, monkeypatch):
+    home = _fake_home(tmp_path, monkeypatch)
+    md = home / "CLAUDE.md"
+    md.write_text("# notes\n")
+    _fake_which(monkeypatch, {"skill-search-mcp": "/fake/bin/skill-search-mcp"})
+    inst.cmd_install(_ns(client=("gemini",), catalog=[str(tmp_path / "c")]))
+    assert md.read_text() == "# notes\n"
+
+def test_cli_hint_uninstall_removes_block(tmp_path, monkeypatch):
+    home = _fake_home(tmp_path, monkeypatch)
+    md = home / "CLAUDE.md"
+    md.write_text("# notes\n")
+    _fake_which(monkeypatch, {"skill-search-mcp": "/fake/bin/skill-search-mcp"})
+    cat = str(tmp_path / "c")
+    inst.cmd_install(_ns(client=("gemini",), catalog=[cat], cli_hint=True))
+    assert "skill-search-cli" in md.read_text()
+    inst.cmd_uninstall(_ns(client=("gemini",), cli_hint=True))
+    assert md.read_text() == "# notes\n"
+
+def test_cli_hint_uninstall_leaves_edited_block(tmp_path, monkeypatch, capsys):
+    home = _fake_home(tmp_path, monkeypatch)
+    md = home / "CLAUDE.md"
+    md.write_text("# notes\n")
+    _fake_which(monkeypatch, {"skill-search-mcp": "/fake/bin/skill-search-mcp"})
+    inst.cmd_install(_ns(client=("gemini",), catalog=[str(tmp_path / "c")], cli_hint=True))
+    md.write_text(md.read_text().replace("skill-search list", "skill-search list --json"))
+    inst.cmd_uninstall(_ns(client=("gemini",), cli_hint=True))
+    assert "leaving it untouched" in capsys.readouterr().out
+    assert "--json" in md.read_text()
 
 def test_cli_wiring(tmp_path, monkeypatch, capsys):
     _fake_home(tmp_path, monkeypatch)

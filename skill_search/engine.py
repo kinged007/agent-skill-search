@@ -13,6 +13,40 @@ from pathlib import Path
 from typing import Optional
 from dataclasses import dataclass, asdict
 
+# ── Known agent skills locations ────────────────────────────────────────────
+# Home-relative skills dirs owned by other agent tools. Only existing ones are
+# ever used, so listing a client you don't have installed costs nothing.
+KNOWN_SKILL_DIRS = (
+    "~/.agents/skills",
+    "~/.config/opencode/skills",
+    "~/.claude/skills",
+    "~/.codex/skills",
+    "~/.cursor/skills",
+    "~/.gemini/skills",
+    "~/.hermes/skills",
+    "~/.opencode/skills",
+    "~/skills",
+    "./.agents/skills",
+)
+
+INCLUDE_KNOWN_ENV = "SKILL_INCLUDE_KNOWN"
+
+def include_known_dirs() -> bool:
+    """True when SKILL_INCLUDE_KNOWN=1 (also accepts true/yes/on)."""
+    return os.environ.get(INCLUDE_KNOWN_ENV, "").strip().lower() in ("1", "true", "yes", "on")
+
+def existing_known_dirs() -> list[str]:
+    """Known skills dirs that exist, deduped by real path (symlinks collapse)."""
+    out, seen = [], set()
+    for d in KNOWN_SKILL_DIRS:
+        expanded = os.path.expanduser(d)
+        if os.path.isdir(expanded):
+            real = os.path.realpath(expanded)
+            if real not in seen:
+                seen.add(real)
+                out.append(real)
+    return out
+
 
 @dataclass
 class SkillEntry:
@@ -91,9 +125,15 @@ def parse_skill_md(filepath: str) -> Optional[SkillEntry]:
 
 
 def scan_catalog(*dirs: str) -> list[SkillEntry]:
-    """Scan directories for SKILL.md files and return parsed entries."""
+    """Scan directories for SKILL.md files and return parsed entries.
+
+    Deduplicates by skill name (first dir wins) so the same skill installed
+    in several agent folders is indexed once. Identical files reached through
+    symlinks are skipped via real-path tracking.
+    """
     entries = []
     seen_names = set()
+    seen_files = set()
 
     for d in dirs:
         d = os.path.expanduser(d)
@@ -103,11 +143,16 @@ def scan_catalog(*dirs: str) -> list[SkillEntry]:
         for root, _, files in os.walk(d):
             for f in files:
                 if f.upper() == "SKILL.MD":
-                    fp = os.path.join(root, f)
+                    fp = os.path.realpath(os.path.join(root, f))
+                    if fp in seen_files:
+                        continue
+                    seen_files.add(fp)
                     entry = parse_skill_md(fp)
-                    if entry and entry.name not in seen_names:
-                        entries.append(entry)
-                        seen_names.add(entry.name)
+                    if entry:
+                        key = entry.name.strip().casefold()
+                        if key not in seen_names:
+                            entries.append(entry)
+                            seen_names.add(key)
 
     return entries
 
