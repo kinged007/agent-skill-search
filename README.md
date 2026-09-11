@@ -1,8 +1,8 @@
-# agent-skill-search
+# Agent Skill Search
 
 Portable skill catalog search for AI agents. MCP server + CLI.
 
-Use grep-like search terms to find relevant skills for your task. Always use this tool before writing code.
+Skills folders eat your agent's context window — every SKILL.md loads whether the task needs it or not. Move them into a catalog and the agent fetches a skill only when it's relevant. Use grep-like search terms to find the right one for your task.
 
 ## Install
 
