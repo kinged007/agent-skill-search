@@ -5,13 +5,14 @@ major agent client can use it; the right channel depends on what the client supp
 
 | Client | Channel | What `install` does |
 | --- | --- | --- |
+| opencode | local MCP | merges `~/.config/opencode/opencode.json` (`mcp` → `{type: local, ...}`) |
 | Claude Code | stdio MCP | runs `claude mcp add --scope user` |
 | Codex CLI | stdio MCP | runs `codex mcp add` |
 | OpenClaw | stdio MCP | runs `openclaw mcp add` |
 | Hermes | stdio MCP | runs `hermes mcp add` |
 | Gemini CLI | stdio MCP | merges `~/.gemini/settings.json` |
 | Claude Desktop | stdio MCP | merges `claude_desktop_config.json` |
-| pi | stdio MCP | merges `./mcp.json` (needs the `pi-mcp` extension) |
+| pi | stdio MCP | merges `~/.pi/agent/mcp.json` (needs the `pi-mcp` extension) |
 | ChatGPT | remote HTTPS MCP | prints self-host instructions (no local config) |
 | Anything else | CLI from a SKILL.md | nothing to install — see below |
 
@@ -127,13 +128,39 @@ Hermes config is YAML, so the installer goes through `hermes mcp add` rather tha
 editing the file. Manual fallback: add a `skill-search` entry under `mcp_servers` in
 `~/.hermes/config.yaml`.
 
+### opencode
+
+```bash
+skill-search install opencode
+```
+
+Merges a `{type: "local", command: [...], environment: {...}}` entry into the
+`mcp` object of `~/.config/opencode/opencode.json` (created if missing). If the
+file contains JSONC comments the installer refuses to rewrite it and tells you
+the exact key to add — add it manually under `mcp`:
+
+```jsonc
+{
+  "mcp": {
+    "skill-search": {
+      "type": "local",
+      "command": ["/absolute/path/to/skill-search-mcp"],
+      "environment": { "SKILL_CATALOG_DIRS": "/path/to/skills" },
+      "enabled": true
+    }
+  }
+}
+```
+
+Verify: `opencode mcp list` shows `skill-search` connected.
+
 ### pi
 
 ```bash
 skill-search install pi
 ```
 
-Writes `mcp.json` in the **current project root**. Requires the
+Writes `~/.pi/agent/mcp.json` (global pi agent dir). Requires the
 [`pi-mcp` extension](https://github.com/badlogic/pi-mcp) in that project. Verify:
 restart pi and check the tool list.
 
@@ -181,6 +208,7 @@ point the agent at:
 
 ```bash
 skill-search search "react performance"   # find skills
+skill-search search "planning|prd|guide"    # OR search
 skill-search view "react-perf"            # load one
 ```
 

@@ -87,7 +87,7 @@ TOOL_DEFINITIONS = [
             "properties": {
                 "query": {
                     "type": "string",
-                    "description": "Grep-style search terms (e.g. 'react performance', 'kubernetes deploy', 'api design')",
+                    "description": "Grep-style search terms (e.g. 'react performance', 'kubernetes deploy', 'api design'). Use `a|b|c` to match any keyword, double quotes for exact phrases.",
                 },
                 "limit": {
                     "type": "integer",

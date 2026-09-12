@@ -7,6 +7,7 @@ and builds an FTS5-backed search index for fast relevance queries.
 
 import os
 import re
+import shlex
 import sqlite3
 import hashlib
 from pathlib import Path
@@ -202,8 +203,38 @@ class SkillIndex:
             )
         self.conn.commit()
 
+    @staticmethod
+    def _normalize_query(query: str) -> str:
+        """Translate user-friendly `a|b|c` into FTS5 `"a" OR "b" OR "c"`.
+
+        Single queries pass through unchanged. Quoted phrases inside a
+        segment are preserved; other tokens are quoted (disables FTS5
+        operators inside user input — ponytail: expose raw FTS5 syntax
+        via a --raw flag when users ask for NEAR/column filters).
+        """
+        if "|" not in query:
+            return query
+        parts = []
+        for raw in query.split("|"):
+            segment = raw.strip()
+            if not segment:
+                continue
+            try:
+                tokens = shlex.split(segment)
+            except ValueError:
+                tokens = [segment]
+            quoted = " ".join(f'"{t}"' for t in tokens)
+            if quoted:
+                parts.append(quoted)
+        return " OR ".join(parts) if parts else query
+
     def search(self, query: str, limit: int = 10) -> list[dict]:
-        """Search skills by query. Returns ranked results with snippets."""
+        """Search skills by query. Returns ranked results with snippets.
+
+        Query syntax: space-separated tokens (implicit AND), pipe-separated
+        tokens (`a|b|c` → `a OR b OR c`), and double-quoted phrases.
+        """
+        query = self._normalize_query(query)
         if not query.strip():
             return self.list_all(limit)
 

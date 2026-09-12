@@ -100,7 +100,20 @@ def test_claude_code_argv(tmp_path, monkeypatch):
 
     assert runs[0] == [
         "claude", "mcp", "add", "--scope", "user",
-        "-e", f"SKILL_CATALOG_DIRS={tmp_path / 'c'}", "skill-search",
+        "-e", f"SKILL_CATALOG_DIRS={tmp_path / 'c'}",
+        "--", "skill-search", "/fake/bin/skill-search-mcp",
+    ]
+
+def test_codex_argv(tmp_path, monkeypatch):
+    runs = []
+    monkeypatch.setattr(inst.subprocess, "run", lambda argv, **kw: runs.append(argv) or type("R", (), {"returncode": 0})())
+    _fake_which(monkeypatch, {"codex": "/fake/codex", "skill-search-mcp": "/fake/bin/skill-search-mcp"})
+
+    inst.cmd_install(_ns(client=("codex",), catalog=[str(tmp_path / "c")]))
+
+    assert runs[0] == [
+        "codex", "mcp", "add", "skill-search",
+        "--env", f"SKILL_CATALOG_DIRS={tmp_path / 'c'}",
         "--", "/fake/bin/skill-search-mcp",
     ]
 
@@ -157,13 +170,38 @@ def test_claude_desktop_appdata_path(tmp_path, monkeypatch):
         tmp_path / "AppData" / "Roaming" / "Claude" / "claude_desktop_config.json")
 
 
-def test_pi_uses_project_root(tmp_path, monkeypatch):
-    _fake_home(tmp_path, monkeypatch)
+def test_pi_uses_global_agent_dir(tmp_path, monkeypatch):
+    home = _fake_home(tmp_path, monkeypatch)
+    (home / ".pi" / "agent").mkdir(parents=True)
     _fake_which(monkeypatch, {"skill-search-mcp": "/fake/bin/skill-search-mcp"})
     inst.cmd_install(_ns(client=("pi",), catalog=[str(tmp_path / "c")]))
-    data = json.loads((tmp_path / "mcp.json").read_text())
+    data = json.loads((home / ".pi" / "agent" / "mcp.json").read_text())
     assert "skill-search" in data["mcpServers"]
 
+
+def test_opencode_merges_local_entry(tmp_path, monkeypatch):
+    home = _fake_home(tmp_path, monkeypatch)
+    _fake_which(monkeypatch, {"skill-search-mcp": "/fake/bin/skill-search-mcp"})
+    inst.cmd_install(_ns(client=("opencode",), catalog=[str(tmp_path / "c")]))
+    data = json.loads((home / ".config" / "opencode" / "opencode.json").read_text())
+    entry = data["mcp"]["skill-search"]
+    assert entry["type"] == "local"
+    assert entry["command"] == ["/fake/bin/skill-search-mcp"]
+    assert entry["environment"] == {"SKILL_CATALOG_DIRS": str(tmp_path / "c")}
+    inst.cmd_uninstall(_ns(client=("opencode",)))
+    data = json.loads((home / ".config" / "opencode" / "opencode.json").read_text())
+    assert "skill-search" not in data["mcp"]
+
+def test_opencode_refuses_commented_jsonc(tmp_path, monkeypatch, capsys):
+    home = _fake_home(tmp_path, monkeypatch)
+    cfg = home / ".config" / "opencode"
+    cfg.mkdir(parents=True)
+    (cfg / "opencode.json").write_text('{\n  // keep me\n  "mcp": {}\n}\n')
+    _fake_which(monkeypatch, {"skill-search-mcp": "/fake/bin/skill-search-mcp"})
+    with pytest.raises(SystemExit):
+        inst.cmd_install(_ns(client=("opencode",), catalog=[str(tmp_path / "c")]))
+    assert "comments" in capsys.readouterr().err
+    assert (cfg / "opencode.json").read_text().startswith("{\n  // keep me")
 
 def test_chatgpt_prints_instructions_no_file(tmp_path, monkeypatch, capsys):
     _fake_home(tmp_path, monkeypatch)

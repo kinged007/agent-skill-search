@@ -24,6 +24,7 @@ pip install agent-skill-search
 export SKILL_CATALOG_DIRS="$HOME/.hermes/skills"
 
 skill-search search "react performance"
+skill-search search "planning|prd|guide"   # multiple keywords (OR search)
 skill-search view "vercel-react-best-practices"
 skill-search list
 
@@ -41,7 +42,7 @@ skill-search add ~/.hermes/skills
 One command installs it into your client:
 
 ```bash
-skill-search install claude-code   # or codex / gemini / openclaw / hermes / pi / claude-desktop / chatgpt
+skill-search install claude-code   # or opencode / codex / gemini / openclaw / hermes / pi / claude-desktop / chatgpt
 ```
 
 See **[INSTALL.md](INSTALL.md)** for per-client details, manual config snippets, the

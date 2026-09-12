@@ -74,8 +74,9 @@ pip install agent-skill-search
 # Set your catalog directories (colon-separated)
 export SKILL_CATALOG_DIRS="$HOME/.hermes/skills:$HOME/.agents/skills"
 
-# Search
+# Search (space = AND, `|` = OR, quotes = phrase)
 skill-search search "react performance"
+skill-search search "planning|prd|guide"
 
 # View a skill
 skill-search view "vercel-react-best-practices"

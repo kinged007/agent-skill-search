@@ -25,19 +25,19 @@ class Client:
     remove_args: tuple[str, ...] | None = None
     config_paths: tuple[str, ...] = ()   # file-backed: home-relative candidates ("APPDATA:" prefix = %APPDATA%-rooted)
     json_key: tuple[str, ...] = ()       # key path to the servers dict
-    use_cwd: bool = False                # config is project-root-relative (pi)
+    use_cwd: bool = False                # legacy: config was project-root-relative
     note: str = ""
 
 
 CLIENTS: list[Client] = [
     Client(
         id="claude-code", name="Claude Code", binary="claude",
-        add_args=("mcp", "add", "--scope", "user", "-e", "{env}", SERVER_NAME, "--", "{cmd}"),
+        add_args=("mcp", "add", "--scope", "user", "-e", "{env}", "--", SERVER_NAME, "{cmd}"),
         remove_args=("mcp", "remove", "-s", "user", SERVER_NAME),
     ),
     Client(
         id="codex", name="Codex CLI", binary="codex",
-        add_args=("mcp", "add", "-e", "{env}", SERVER_NAME, "--", "{cmd}"),
+        add_args=("mcp", "add", SERVER_NAME, "--env", "{env}", "--", "{cmd}"),
         remove_args=("mcp", "remove", SERVER_NAME),
     ),
     Client(
@@ -49,6 +49,12 @@ CLIENTS: list[Client] = [
         id="hermes", name="Hermes", binary="hermes",
         add_args=("mcp", "add", "-e", "{env}", SERVER_NAME, "--", "{cmd}"),
         remove_args=("mcp", "remove", SERVER_NAME),
+    ),
+    Client(
+        id="opencode", name="opencode",
+        config_paths=(".config/opencode/opencode.json", ".config/opencode/opencode.jsonc"),
+        json_key=("mcp",),
+        note="config is JSONC; installer refuses to rewrite files with comments",
     ),
     Client(
         id="gemini", name="Gemini CLI",
@@ -66,10 +72,9 @@ CLIENTS: list[Client] = [
     ),
     Client(
         id="pi", name="pi",
-        config_paths=("mcp.json",),
+        config_paths=("~/.pi/agent/mcp.json",),
         json_key=("mcpServers",),
-        use_cwd=True,
-        note="requires the pi-mcp extension in the project",
+        note="pi has no built-in MCP; needs the pi-mcp extension loaded",
     ),
     Client(
         id="chatgpt", name="ChatGPT",
@@ -102,8 +107,8 @@ def resolve_config_path(client: Client) -> str | None:
             if not appdata:
                 continue
             path = os.path.join(appdata, path[len("APPDATA:"):])
-        elif client.use_cwd:
-            path = os.path.join(os.getcwd(), path)
+        elif path.startswith("~"):
+            path = os.path.expanduser(path)
         else:
             path = os.path.join(os.path.expanduser("~"), path)
         if first is None:

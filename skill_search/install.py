@@ -7,6 +7,7 @@ a backup taken before the first write. --dry-run prints and writes nothing.
 """
 
 import os
+import re
 import sys
 import json
 import shutil
@@ -143,6 +144,8 @@ def cmd_install(args) -> None:
                 print_chatgpt_instructions(dirs, args.dry_run)
             elif t.client.binary:
                 install_command_backed(t, dirs, cmd, cmd_args, args.dry_run)
+            elif t.client.id == "opencode":
+                install_opencode(t, dirs, cmd, cmd_args, args.dry_run)
             else:
                 install_file_backed(t, dirs, cmd, cmd_args, args.dry_run)
             print(f"  ok: {t.client.id}")
@@ -228,6 +231,70 @@ def install_file_backed(t: Target, dirs, cmd, cmd_args, dry_run: bool) -> None:
     print(f"  wrote {path}")
 
 
+def install_opencode(t: Target, dirs, cmd, cmd_args, dry_run: bool) -> None:
+    """Merge the server entry into opencode's JSONC global config.
+
+    opencode's `mcp add` is interactive-only; its config schema for local
+    servers is `mcp.<name> = {type: local, command: [...], environment: {...}}`.
+    The file is JSONC (comments allowed) — parse with comment stripping, but
+    write back plain JSON only when the original has no comments (else take a
+    backup and merge textually is out of scope: refuse and point at the docs).
+    """
+    path = resolve_config_path(t.client)
+    if path is None:
+        print(f"Error: could not resolve config path for {t.client.name}.", file=sys.stderr)
+        sys.exit(1)
+    entry = {
+        "type": "local",
+        "command": [cmd, *cmd_args],
+        "environment": {"SKILL_CATALOG_DIRS": ":".join(dirs)},
+        "enabled": True,
+    }
+    if dry_run:
+        print(f"[dry-run] {t.client.id}: would merge into {path}")
+        print("  " + json.dumps({SERVER_NAME: entry}))
+        return
+    os.makedirs(os.path.dirname(path) or ".", exist_ok=True)
+    data: dict = {}
+    raw = ""
+    if os.path.isfile(path):
+        with open(path, "r", encoding="utf-8") as f:
+            raw = f.read()
+        try:
+            data = json.loads(_strip_jsonc(raw))
+        except json.JSONDecodeError as e:
+            print(f"Error: {path} is not valid JSON/JSONC ({e}); refusing to overwrite. "
+                  f"Fix or remove the file, then retry.", file=sys.stderr)
+            sys.exit(1)
+    mcp = data.setdefault("mcp", {})
+    if mcp.get(SERVER_NAME) == entry:
+        print(f"  {t.client.id}: already installed")
+        return
+    if SERVER_NAME in mcp:
+        print(f"  {t.client.id}: updating existing '{SERVER_NAME}' entry")
+    mcp[SERVER_NAME] = entry
+    if os.path.isfile(path):
+        if _has_jsonc_comments(raw):
+            print(f"Error: {path} contains comments; refusing to rewrite. "
+                  f"Add the entry manually (see INSTALL.md #opencode), then retry.",
+                  file=sys.stderr)
+            sys.exit(1)
+        backup = _backup_path(path)
+        shutil.copy2(path, backup)
+        print(f"  backup: {backup}")
+    with open(path, "w", encoding="utf-8") as f:
+        json.dump(data, f, indent=2)
+        f.write("\n")
+    print(f"  wrote {path}")
+
+def _strip_jsonc(text: str) -> str:
+    text = re.sub(r"(?m)^[ \t]*//.*$", "", text)
+    return re.sub(r"/\*[\s\S]*?\*/", "", text)
+
+def _has_jsonc_comments(text: str) -> bool:
+    stripped = _strip_jsonc(text)
+    return len(stripped) != len(text)
+
 def _backup_path(path: str) -> str:
     n = 1
     while os.path.exists(f"{path}.bak-{n}"):
@@ -242,8 +309,9 @@ HINT_BODY = """## skill-search (CLI)
 
 Search the local skills catalog before writing code or executing tasks:
 
-  skill-search search "<keywords>"   # find relevant skills (name + description)
-  skill-search view <name>           # read the full skill
+  skill-search search "<keywords>"      # find skills (name + description)
+  skill-search search "plan|prd|guide"  # OR: match any keyword
+  skill-search view <name>              # read the full skill
   skill-search list                  # list all cataloged skills
 
 Catalog: `~/.agents/skills-catalog` (`SKILL_CATALOG_DIRS` to override).
@@ -253,8 +321,8 @@ HINT_CANDIDATES = (
     "~/.claude/CLAUDE.md",
     "~/CLAUDE.md",
     "~/AGENTS.md",
-    "./CLAUDE.md",
-    "./AGENTS.md",
+    # "./CLAUDE.md", # Duplicated in user level. not required in project too.
+    # "./AGENTS.md",
 )
 
 def hint_targets() -> list[str]:
@@ -348,6 +416,9 @@ def cmd_uninstall(args) -> None:
 
 
 def _uninstall_file_backed(c: Client) -> None:
+    if c.id == "opencode":
+        _uninstall_opencode(c)
+        return
     path = resolve_config_path(c)
     if path is None or not os.path.isfile(path):
         print(f"  {c.id}: no config at {path}; nothing to do")
@@ -374,6 +445,35 @@ def _uninstall_file_backed(c: Client) -> None:
     backup = _backup_path(path)
     shutil.copy2(path, backup)
     del servers[SERVER_NAME]
+    with open(path, "w", encoding="utf-8") as f:
+        json.dump(data, f, indent=2)
+        f.write("\n")
+    print(f"  removed '{SERVER_NAME}' from {path} (backup: {backup})")
+
+def _uninstall_opencode(c: Client) -> None:
+    path = resolve_config_path(c)
+    if path is None or not os.path.isfile(path):
+        print(f"  {c.id}: no config at {path}; nothing to do")
+        return
+    with open(path, "r", encoding="utf-8") as f:
+        raw = f.read()
+    try:
+        data = json.loads(_strip_jsonc(raw))
+    except json.JSONDecodeError as e:
+        print(f"Error: {path} is not valid JSON/JSONC ({e}); leaving it untouched.",
+              file=sys.stderr)
+        sys.exit(1)
+    mcp = data.get("mcp", {})
+    if SERVER_NAME not in mcp:
+        print(f"  {c.id}: no '{SERVER_NAME}' entry")
+        return
+    if _has_jsonc_comments(raw):
+        print(f"Error: {path} contains comments; refusing to rewrite. "
+              f"Remove the '{SERVER_NAME}' key under `mcp` manually.", file=sys.stderr)
+        sys.exit(1)
+    backup = _backup_path(path)
+    shutil.copy2(path, backup)
+    del mcp[SERVER_NAME]
     with open(path, "w", encoding="utf-8") as f:
         json.dump(data, f, indent=2)
         f.write("\n")

@@ -230,7 +230,7 @@ def main():
     sub = parser.add_subparsers(dest="command")
 
     p_search = sub.add_parser("search", help="Search skills by keyword")
-    p_search.add_argument("query", help="Search query (grep-style)")
+    p_search.add_argument("query", help="Search query (grep-style). Use `a|b|c` for OR matching, quoted phrases, space-separated tokens ANDed together")
     p_search.add_argument("--limit", type=int, default=10, help="Max results")
     _add_common_flags(p_search, is_sub=True)
 

@@ -64,6 +64,13 @@ def test_stdio_tools_roundtrip():
         })
         assert not r["result"]["isError"]
         assert "react-perf" in r["result"]["content"][0]["text"]
+
+        r = _rpc(proc, 4, "tools/call", {
+            "name": "skill_search",
+            "arguments": {"query": "react|nonexistent"},
+        })
+        assert not r["result"]["isError"]
+        assert "react-perf" in r["result"]["content"][0]["text"]
     finally:
         proc.terminate()
         proc.wait(timeout=5)
