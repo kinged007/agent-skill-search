@@ -34,6 +34,7 @@ from .engine import (
     SkillIndex,
     existing_known_dirs,
     include_known_dirs,
+    read_config_default,
 )
 
 
@@ -51,7 +52,8 @@ def get_catalog_dirs() -> list[str]:
         dirs = existing_known_dirs()
     else:
         dirs = []
-        for d in [DEFAULT_CATALOG, LOCAL_CATALOG]:
+        candidates = [read_config_default() or DEFAULT_CATALOG, LOCAL_CATALOG]
+        for d in candidates:
             expanded = os.path.expanduser(d)
             if os.path.isdir(expanded):
                 dirs.append(expanded)

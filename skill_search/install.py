@@ -15,10 +15,14 @@ import subprocess
 from dataclasses import dataclass
 
 from . import clients as cl
-from .engine import existing_known_dirs, include_known_dirs
+from .engine import existing_known_dirs, include_known_dirs, read_config_default
 from .clients import SERVER_NAME, CLIENTS, Client, get_client, resolve_config_path
 
 DEFAULT_CATALOG = "~/.agents/skills-catalog"
+
+def default_catalog_dir() -> str:
+    """Builtin default, or the persisted custom default from `dirs --set`."""
+    return read_config_default() or os.path.expanduser(DEFAULT_CATALOG)
 
 
 # ── Resolution ──────────────────────────────────────────────────────────────
@@ -37,7 +41,7 @@ def resolve_catalog_dirs(explicit: list[str] | None, include_known: bool | None 
         raw, create = list(explicit), True
     else:
         env = os.environ.get("SKILL_CATALOG_DIRS", "")
-        raw = env.split(":") if env else [DEFAULT_CATALOG]
+        raw = env.split(":") if env else [default_catalog_dir()]
         create = not env
     if include_known:
         raw = [*raw, *existing_known_dirs()]

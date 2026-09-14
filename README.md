@@ -35,6 +35,11 @@ skill-search --include-known list        # or SKILL_INCLUDE_KNOWN=1
 # Move skills from a source dir into the catalog (frees agent context).
 # Note: `add` MOVES directories out of the source tree, it does not copy.
 skill-search add ~/.hermes/skills
+
+# Always shows the active dirs (stderr); inspect or change the default:
+skill-search dirs                # show default, config file, active dirs
+skill-search dirs --set ~/skills # persist DIR as the default catalog
+skill-search dirs --reset        # back to ~/.agents/skills-catalog
 ```
 
 ### MCP server

@@ -5,6 +5,7 @@ Scans directories for SKILL.md files, parses YAML frontmatter,
 and builds an FTS5-backed search index for fast relevance queries.
 """
 
+import json
 import os
 import re
 import shlex
@@ -47,6 +48,57 @@ def existing_known_dirs() -> list[str]:
                 seen.add(real)
                 out.append(real)
     return out
+
+# ── Persistent default dir ──────────────────────────────────────────────────
+# `skill-search dirs --set DIR` stores a custom default here. Explicit dirs
+# (--dirs flag, SKILL_CATALOG_DIRS) always win; the file only replaces the
+# builtin ~/.agents/skills-catalog slot.
+# ponytail: single-key file on purpose — add keys when a second persistent
+# setting actually lands.
+CONFIG_DIRNAME = "skill-search"
+CONFIG_FILENAME = "config.json"
+
+def config_path() -> str:
+    """~/.config/skill-search/config.json (XDG_CONFIG_HOME-aware)."""
+    base = os.environ.get("XDG_CONFIG_HOME") or os.path.join(os.path.expanduser("~"), ".config")
+    return os.path.join(os.path.expanduser(base), CONFIG_DIRNAME, CONFIG_FILENAME)
+
+def read_config_default() -> Optional[str]:
+    """Custom default catalog dir, or None when the builtin applies."""
+    try:
+        with open(config_path(), "r", encoding="utf-8") as f:
+            data = json.load(f)
+    except (OSError, ValueError):
+        return None
+    d = (data or {}).get("default_dir")
+    return os.path.expanduser(d) if d else None
+
+def write_config_default(d: str) -> str:
+    """Persist DIR as the default catalog dir (creating it). Returns its path."""
+    path = config_path()
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    real = os.path.abspath(os.path.expanduser(d))
+    os.makedirs(real, exist_ok=True)
+    with open(path, "w", encoding="utf-8") as f:
+        json.dump({"default_dir": real}, f, indent=2)
+        f.write("\n")
+    return real
+
+def clear_config_default() -> bool:
+    """Drop the custom default. True when one was actually set."""
+    path = config_path()
+    try:
+        with open(path, "r", encoding="utf-8") as f:
+            data = json.load(f)
+    except (OSError, ValueError):
+        return False
+    if not (data or {}).get("default_dir"):
+        return False
+    try:
+        os.remove(path)
+    except OSError:
+        return False
+    return True
 
 
 @dataclass

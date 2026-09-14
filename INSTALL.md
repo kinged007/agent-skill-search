@@ -12,7 +12,7 @@ major agent client can use it; the right channel depends on what the client supp
 | Hermes | stdio MCP | runs `hermes mcp add` |
 | Gemini CLI | stdio MCP | merges `~/.gemini/settings.json` |
 | Claude Desktop | stdio MCP | merges `claude_desktop_config.json` |
-| pi | stdio MCP | merges `~/.pi/agent/mcp.json` (needs the `pi-mcp` extension) |
+| pi | stdio MCP | merges `~/.pi/agent/id` (needs the `pi-mcp` extension) |
 | ChatGPT | remote HTTPS MCP | prints self-host instructions (no local config) |
 | Anything else | CLI from a SKILL.md | nothing to install — see below |
 
@@ -44,8 +44,12 @@ This gives you:
 The server reads SKILL.md catalogs from, in order:
 
 1. `SKILL_CATALOG_DIRS` (colon-separated, e.g. `~/skills:~/more-skills`)
-2. `~/.agents/skills-catalog` (default; created on demand)
+2. `~/.agents/skills-catalog` (default — change with `skill-search dirs --set DIR`)
 3. `./.agents/skills-catalog` (project-local default)
+
+`search`, `view`, and `list` print the active dirs on stderr so piped stdout
+stays clean. `skill-search dirs` shows the persisted default, its config file
+(`~/.config/skill-search/config.json`), and the active dirs.
 
 `skill-search install` writes the resolved catalog dirs into each client's config as
 `SKILL_CATALOG_DIRS`, so the client does not need the env var set. Override per install:

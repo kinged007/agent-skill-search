@@ -6,9 +6,11 @@ Usage:
     skill-search view <name>
     skill-search list [--limit N]
     skill-search add <skills-dir>    # Move skills into catalog
+    skill-search dirs [--set DIR | --reset]  # Show/change catalog dirs
 
 Catalog dirs: --dirs flag > SKILL_CATALOG_DIRS env > defaults
-(~/.agents/skills-catalog, ./.agents/skills-catalog).
+(~/.agents/skills-catalog, ./.agents/skills-catalog; `dirs --set DIR`
+persists a custom default in ~/.config/skill-search/config.json).
 --include-known (or SKILL_INCLUDE_KNOWN=1) additionally scans well-known
 agent skills locations (opencode, claude, codex, ...). Same-named skills
 are deduplicated, first dir wins.
@@ -24,8 +26,12 @@ from pathlib import Path
 from .engine import (
     build_index,
     SkillIndex,
+    clear_config_default,
+    config_path,
     existing_known_dirs,
     include_known_dirs,
+    read_config_default,
+    write_config_default,
 )
 
 # ── Catalog resolution ──────────────────────────────────────────────────────
@@ -44,6 +50,13 @@ def want_known(args) -> bool:
         return flag
     return include_known_dirs()
 
+def get_default_dirs() -> list[str]:
+    """Builtin + local defaults, with a persisted custom default first if set."""
+    custom = read_config_default()
+    candidates = ([custom] if custom else [DEFAULT_CATALOG]) + [LOCAL_CATALOG]
+    return [os.path.expanduser(d) for d in candidates if os.path.isdir(os.path.expanduser(d))]
+
+
 def get_catalog_dirs(extra: str = None, include_known: bool = False) -> list[str]:
     """Resolve catalog directories. Explicit dirs first, then known, then defaults."""
     dirs = []
@@ -61,12 +74,9 @@ def get_catalog_dirs(extra: str = None, include_known: bool = False) -> list[str
     if include_known:
         dirs.extend(existing_known_dirs())
 
-    # If no explicit dirs, use defaults
+    # If no explicit dirs, use defaults (persisted custom default wins)
     if not dirs:
-        for d in [DEFAULT_CATALOG, LOCAL_CATALOG]:
-            expanded = os.path.expanduser(d)
-            if os.path.isdir(expanded):
-                dirs.append(expanded)
+        dirs.extend(get_default_dirs())
 
     # Deduplicate, preserve order, verify existence
     seen = set()
@@ -83,7 +93,7 @@ def get_catalog_dirs(extra: str = None, include_known: bool = False) -> list[str
 
 def ensure_catalog_exists() -> str:
     """Create the default catalog dir if it doesn't exist. Returns the path."""
-    cat = os.path.expanduser(DEFAULT_CATALOG)
+    cat = read_config_default() or os.path.expanduser(DEFAULT_CATALOG)
     os.makedirs(cat, exist_ok=True)
     return cat
 
@@ -98,6 +108,7 @@ def cmd_search(args):
         sys.exit(1)
 
     index = build_index(*dirs)
+    print(f"Catalog dirs: {':'.join(dirs)}", file=sys.stderr)
     results = index.search(args.query, limit=args.limit)
 
     if not results:
@@ -120,6 +131,7 @@ def cmd_view(args):
         sys.exit(1)
 
     index = build_index(*dirs)
+    print(f"Catalog dirs: {':'.join(dirs)}", file=sys.stderr)
     result = index.get_skill(args.name)
 
     if not result:
@@ -141,6 +153,7 @@ def cmd_list(args):
         sys.exit(1)
 
     index = build_index(*dirs)
+    print(f"Catalog dirs: {':'.join(dirs)}", file=sys.stderr)
     results = index.list_all(limit=args.limit)
 
     if _flag(args, "json", False):
@@ -163,7 +176,7 @@ def cmd_add(args):
         print(f"Error: '{src}' is not a directory.", file=sys.stderr)
         sys.exit(1)
 
-    catalog = os.path.expanduser(DEFAULT_CATALOG)
+    catalog = read_config_default() or os.path.expanduser(DEFAULT_CATALOG)
     os.makedirs(catalog, exist_ok=True)
 
     # Scan source for SKILL.md files to find skill directories
@@ -200,8 +213,30 @@ def cmd_add(args):
         print(f"  Moved: {item} → {catalog}/")
         moved += 1
 
-    print(f"\nDone: {moved} moved, {skipped} skipped")
-    print(f"Catalog: {catalog}")
+    print(f"\nDone: {moved} moved, {skipped} skipped", file=sys.stderr)
+    print(f"Catalog: {catalog}", file=sys.stderr)
+
+
+def cmd_dirs(args):
+    """Show active catalog dirs, or persist a custom default dir."""
+    if getattr(args, "reset", False):
+        if clear_config_default():
+            print(f"Default reset to {DEFAULT_CATALOG}")
+        else:
+            print(f"Already using default {DEFAULT_CATALOG}")
+        return
+    if getattr(args, "set", None):
+        real = write_config_default(args.set)
+        print(f"Default catalog: {real}")
+        print(f"Config: {config_path()}")
+        return
+    dirs = get_catalog_dirs(_flag(args, "dirs", None), want_known(args))
+    custom = read_config_default()
+    print(f"Default: {custom or os.path.expanduser(DEFAULT_CATALOG)}")
+    print(f"Config: {config_path()}" + (" (custom)" if custom else " (builtin)"))
+    if _flag(args, "dirs", None) or os.environ.get("SKILL_CATALOG_DIRS"):
+        print(f"Override: {_flag(args, 'dirs', '') or os.environ.get('SKILL_CATALOG_DIRS', '')}")
+    print(f"Active: {':'.join(dirs) if dirs else '(none found)'}")
 
 # ── Main ────────────────────────────────────────────────────────────────────
 
@@ -245,6 +280,13 @@ def main():
     p_add = sub.add_parser("add", help="Move skills from a directory into the catalog")
     p_add.add_argument("source", help="Source skills directory to move from")
 
+    p_dirs = sub.add_parser("dirs", help="Show catalog dirs, or change the default")
+    p_dirs.add_argument("--set", metavar="DIR", default=None,
+                        help="Persist DIR as the default catalog dir (replaces ~/.agents/skills-catalog)")
+    p_dirs.add_argument("--reset", action="store_true",
+                        help="Forget the custom default; go back to ~/.agents/skills-catalog")
+    _add_common_flags(p_dirs, is_sub=True)
+
     p_install = sub.add_parser("install", help="Install the MCP server into an agent client")
     p_install.add_argument("client", nargs="*", help="Client id(s) — see --list")
     p_install.add_argument("--list", action="store_true", help="List known clients")
@@ -274,6 +316,8 @@ def main():
         cmd_list(args)
     elif args.command == "add":
         cmd_add(args)
+    elif args.command == "dirs":
+        cmd_dirs(args)
     elif args.command == "install":
         from .install import cmd_install
         cmd_install(args)
