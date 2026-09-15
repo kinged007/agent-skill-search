@@ -257,15 +257,22 @@ class SkillIndex:
 
     @staticmethod
     def _normalize_query(query: str) -> str:
-        """Translate user-friendly `a|b|c` into FTS5 `"a" OR "b" OR "c"`.
+        """Translate user-friendly queries into FTS5 syntax.
 
-        Single queries pass through unchanged. Quoted phrases inside a
-        segment are preserved; other tokens are quoted (disables FTS5
-        operators inside user input — ponytail: expose raw FTS5 syntax
-        via a --raw flag when users ask for NEAR/column filters).
+        `a|b|c` → `"a" OR "b" OR "c"`; space-separated tokens are ANDed
+        (`a b` → `"a" "b"`). Quoted phrases are preserved; other tokens
+        are quoted (disables FTS5 operators inside user input — ponytail:
+        expose raw FTS5 syntax via a --raw flag when users ask for
+        NEAR/column filters).
         """
         if "|" not in query:
-            return query
+            try:
+                tokens = shlex.split(query)
+            except ValueError:
+                return query
+            if len(tokens) <= 1:
+                return query
+            return " ".join(f'"{t}"' for t in tokens if t)
         parts = []
         for raw in query.split("|"):
             segment = raw.strip()

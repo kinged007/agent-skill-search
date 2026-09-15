@@ -44,7 +44,7 @@ def resolve_catalog_dirs(explicit: list[str] | None, include_known: bool | None 
         raw = env.split(":") if env else [default_catalog_dir()]
         create = not env
     if include_known:
-        raw = [*raw, *existing_known_dirs()]
+        raw = [*raw, *existing_known_dirs()]  # appends; defaults come first
 
     out, seen = [], set()
     for d in raw:

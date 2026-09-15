@@ -44,12 +44,10 @@ DEFAULT_CATALOG = "~/.agents/skills-catalog"
 LOCAL_CATALOG = "./.agents/skills-catalog"
 
 def get_catalog_dirs() -> list[str]:
-    """Resolve catalog directories from env, known locations, or defaults."""
+    """Resolve catalog directories: defaults (or env override) first, then known."""
     env = os.environ.get("SKILL_CATALOG_DIRS", "")
     if env:
         dirs = [d.strip() for d in env.split(":") if d.strip()]
-    elif include_known_dirs():
-        dirs = existing_known_dirs()
     else:
         dirs = []
         candidates = [read_config_default() or DEFAULT_CATALOG, LOCAL_CATALOG]
@@ -57,6 +55,8 @@ def get_catalog_dirs() -> list[str]:
             expanded = os.path.expanduser(d)
             if os.path.isdir(expanded):
                 dirs.append(expanded)
+    if include_known_dirs():
+        dirs.extend(existing_known_dirs())
     return dirs
 
 

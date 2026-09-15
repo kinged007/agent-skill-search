@@ -21,6 +21,18 @@ pip install agent-skill-search
 ### CLI
 
 ```bash
+skill-search --version               # show version
+skill-search update                # upgrade to the latest release
+skill-search update --check        # show current version only
+
+# Shorthand: `skill-search "<query>"` == `skill-search search "<query>"`.
+skill-search "react performance"
+
+# Default catalog dir is `~/.agents/skills-catalog` (persist a custom one with
+# `skill-search dirs --set DIR`). Override per command with `--dirs` or
+# `SKILL_CATALOG_DIRS=dir1:dir2`. Bare `skill-search` prints help plus the
+# active dirs.
+
 export SKILL_CATALOG_DIRS="$HOME/.hermes/skills"
 
 skill-search search "react performance"
@@ -32,14 +44,14 @@ skill-search list
 # Same-named skills are deduplicated; off by default.
 skill-search --include-known list        # or SKILL_INCLUDE_KNOWN=1
 
-# Move skills from a source dir into the catalog (frees agent context).
-# Note: `add` MOVES directories out of the source tree, it does not copy.
+# `add` COPIES skill dirs into the default catalog (`~/.agents/skills-catalog`
+# unless changed with `dirs --set`); the source tree is left untouched.
 skill-search add ~/.hermes/skills
 
 # Always shows the active dirs (stderr); inspect or change the default:
-skill-search dirs                # show default, config file, active dirs
+skill-search dirs                # show default, config file, known dirs, active dirs
 skill-search dirs --set ~/skills # persist DIR as the default catalog
-skill-search dirs --reset        # back to ~/.agents/skills-catalog
+skill-search dirs --reset        # back to ~/.agents/skills-catalog (also: `dirs --set ""`)
 ```
 
 ### MCP server

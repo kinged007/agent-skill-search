@@ -96,9 +96,19 @@ skill-search list
 
 ## Catalog management
 
-`skill-search add <dir>` **moves** skill directories out of the source tree into
-`~/.agents/skills-catalog` — it does not copy them. The originals will no longer be in
-place for the tool they came from.
+`skill-search add <dir>` **copies** skill directories from the source tree into
+the default catalog (`~/.agents/skills-catalog`) — the source is left untouched.
+
+Search the catalog:
+
+```bash
+skill-search search "react performance"   # find skills
+skill-search search "planning|prd|guide"  # OR search
+skill-search "agent orchestration instructions"  # shorthand (== search)
+skill-search view "react-perf"             # load one
+skill-search --version                   # show version
+skill-search update                      # upgrade to the latest release
+```
 
 ## Usage Pattern for Agents
 

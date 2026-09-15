@@ -31,7 +31,7 @@ pip install agent-skill-search
 
 This gives you:
 
-- `skill-search` — the CLI (`search`, `view`, `list`, `add`, `install`, `uninstall`)
+- `skill-search` — the CLI (`search`, `view`, `list`, `add`, `dirs`, `install`, `uninstall`, `update`)
 - `skill-search-mcp` — the MCP server binary
 
 > **Name collision warning:** an unrelated PyPI package named `skill-search` also installs
@@ -248,12 +248,14 @@ skill-search uninstall gemini --cli-hint  # also removes the hint snippet
 - **No skills found** — `SKILL_CATALOG_DIRS` is colon-separated
   (`dir1:dir2`). Check what got written with `skill-search install <client> --dry-run`,
   and test locally with `SKILL_CATALOG_DIRS=... skill-search list`.
+  The default catalog dir is `~/.agents/skills-catalog` — see `skill-search dirs`.
 - **`skill-search` command belongs to another package** — see the collision warning
   above; use `uv tool install agent-skill-search` or `pipx`.
 - **Claude Desktop logs** — `~/Library/Logs/Claude/mcp*.log` (macOS),
   `%APPDATA%\Claude\logs` (Windows).
-- **`skill-search add` moves directories** — it moves skill dirs out of the source
-  tree into `~/.agents/skills-catalog` (not a copy).
+- **`skill-search add` copies directories** — it copies skill dirs from the source
+  tree into `~/.agents/skills-catalog` (or the `dirs --set` custom default).
+  The source is left untouched, so the original tool keeps working.
 - **Client config schema drift** — command-backed clients (Claude Code, Codex,
   OpenClaw, Hermes) delegate to their own `mcp add`, so their vendor owns the schema.
   The file-backed targets (Gemini CLI, Claude Desktop, pi) are the ones that may need

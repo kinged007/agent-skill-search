@@ -5,12 +5,15 @@ Usage:
     skill-search search <query> [--limit N]
     skill-search view <name>
     skill-search list [--limit N]
-    skill-search add <skills-dir>    # Move skills into catalog
+    skill-search add <skills-dir>    # Copy skills into catalog
     skill-search dirs [--set DIR | --reset]  # Show/change catalog dirs
 
-Catalog dirs: --dirs flag > SKILL_CATALOG_DIRS env > defaults
-(~/.agents/skills-catalog, ./.agents/skills-catalog; `dirs --set DIR`
-persists a custom default in ~/.config/skill-search/config.json).
+Default catalog dir: ~/.agents/skills-catalog (persist a custom one with
+`dirs --set DIR`). Env/config resolution:
+Catalog dirs (defaults first): `~/.agents/skills-catalog` then `./.agents/skills-catalog`.
+Persist a custom default with `skill-search dirs --set DIR` (stored in
+`~/.config/skill-search/config.json`); override per-command with `--dirs` or
+`SKILL_CATALOG_DIRS=dir1:dir2`. Search commands print the active dirs on stderr.
 --include-known (or SKILL_INCLUDE_KNOWN=1) additionally scans well-known
 agent skills locations (opencode, claude, codex, ...). Same-named skills
 are deduplicated, first dir wins.
@@ -21,9 +24,14 @@ import sys
 import json
 import shutil
 import argparse
+import subprocess
+from importlib.metadata import PackageNotFoundError, version as _pkg_version
 from pathlib import Path
 
+from . import __version__
+
 from .engine import (
+    KNOWN_SKILL_DIRS,
     build_index,
     SkillIndex,
     clear_config_default,
@@ -38,6 +46,8 @@ from .engine import (
 
 DEFAULT_CATALOG = "~/.agents/skills-catalog"
 LOCAL_CATALOG = "./.agents/skills-catalog"
+
+_KNOWN_LABELS = [os.path.expanduser(d) for d in KNOWN_SKILL_DIRS]
 
 def _flag(args, name, default):
     """Common flag readable wherever it was given (global or subcommand)."""
@@ -58,7 +68,7 @@ def get_default_dirs() -> list[str]:
 
 
 def get_catalog_dirs(extra: str = None, include_known: bool = False) -> list[str]:
-    """Resolve catalog directories. Explicit dirs first, then known, then defaults."""
+    """Resolve catalog directories. Explicit dirs (or defaults) first, then known."""
     dirs = []
 
     # Explicit dirs from CLI flag
@@ -70,13 +80,13 @@ def get_catalog_dirs(extra: str = None, include_known: bool = False) -> list[str
     if env:
         dirs.extend(d.strip() for d in env.split(":") if d.strip())
 
+    # No explicit dirs: defaults first (persisted custom default wins)
+    if not dirs:
+        dirs.extend(get_default_dirs())
+
     # Well-known agent skills locations (opencode, claude, codex, ...)
     if include_known:
         dirs.extend(existing_known_dirs())
-
-    # If no explicit dirs, use defaults (persisted custom default wins)
-    if not dirs:
-        dirs.extend(get_default_dirs())
 
     # Deduplicate, preserve order, verify existence
     seen = set()
@@ -170,7 +180,7 @@ def cmd_list(args):
         print()
 
 def cmd_add(args):
-    """Move skills from a source directory into the catalog."""
+    """Copy skills from a source directory into the catalog (source untouched)."""
     src = os.path.expanduser(args.source)
     if not os.path.isdir(src):
         print(f"Error: '{src}' is not a directory.", file=sys.stderr)
@@ -180,7 +190,7 @@ def cmd_add(args):
     os.makedirs(catalog, exist_ok=True)
 
     # Scan source for SKILL.md files to find skill directories
-    moved = 0
+    copied = 0
     skipped = 0
 
     for item in sorted(os.listdir(src)):
@@ -209,11 +219,11 @@ def cmd_add(args):
             skipped += 1
             continue
 
-        shutil.move(item_path, dest)
-        print(f"  Moved: {item} → {catalog}/")
-        moved += 1
+        shutil.copytree(item_path, dest)
+        print(f"  Copied: {item} → {catalog}/")
+        copied += 1
 
-    print(f"\nDone: {moved} moved, {skipped} skipped", file=sys.stderr)
+    print(f"\nDone: {copied} copied, {skipped} skipped", file=sys.stderr)
     print(f"Catalog: {catalog}", file=sys.stderr)
 
 
@@ -236,6 +246,10 @@ def cmd_dirs(args):
     print(f"Config: {config_path()}" + (" (custom)" if custom else " (builtin)"))
     if _flag(args, "dirs", None) or os.environ.get("SKILL_CATALOG_DIRS"):
         print(f"Override: {_flag(args, 'dirs', '') or os.environ.get('SKILL_CATALOG_DIRS', '')}")
+    if want_known(args):
+        print(f"Known (included): {':'.join(_KNOWN_LABELS)}")
+    else:
+        print(f"Known (excluded — add --include-known): {':'.join(_KNOWN_LABELS)}")
     print(f"Active: {':'.join(dirs) if dirs else '(none found)'}")
 
 # ── Main ────────────────────────────────────────────────────────────────────
@@ -255,11 +269,19 @@ def _add_common_flags(p, is_sub=False):
     p.add_argument("--no-include-known", dest="include_known", action="store_false",
                    help="Do not scan well-known agent skills dirs")
 
-def main():
+def main(argv: list[str] | None = None):
     parser = argparse.ArgumentParser(
         prog="skill-search",
         description="Universal skill search — find relevant skills from your catalog",
     )
+    # Shorthand must run before parsing: `skill-search <query>` ==
+    # `skill-search search <query>`. Otherwise argparse exits on the
+    # unknown command before we get a chance to rewrite it.
+    if argv is None:
+        argv = sys.argv[1:]
+    subcommands = {"search", "view", "list", "add", "dirs", "install", "uninstall", "update"}
+    if argv and not argv[0].startswith("-") and argv[0] not in subcommands:
+        argv = ["search", *argv]
     _add_common_flags(parser)
 
     sub = parser.add_subparsers(dest="command")
@@ -277,8 +299,8 @@ def main():
     p_list.add_argument("--limit", type=int, default=100, help="Max results")
     _add_common_flags(p_list, is_sub=True)
 
-    p_add = sub.add_parser("add", help="Move skills from a directory into the catalog")
-    p_add.add_argument("source", help="Source skills directory to move from")
+    p_add = sub.add_parser("add", help="Copy skills from a directory into the catalog")
+    p_add.add_argument("source", help="Source skills directory to copy from")
 
     p_dirs = sub.add_parser("dirs", help="Show catalog dirs, or change the default")
     p_dirs.add_argument("--set", metavar="DIR", default=None,
@@ -306,7 +328,15 @@ def main():
     p_uninstall.add_argument("--cli-hint", action="store_true",
                              help="Also remove the CLI usage snippet from CLAUDE.md/AGENTS.md")
 
-    args = parser.parse_args()
+    p_update = sub.add_parser("update", help="Update skill-search to the latest version")
+    p_update.add_argument("--check", action="store_true",
+                          help="Only show the current version; do not install")
+
+    parser.add_argument(
+        "--version", action="version", version=f"%(prog)s {__version__}"
+    )
+
+    args = parser.parse_args(argv)
 
     if args.command == "search":
         cmd_search(args)
@@ -318,6 +348,8 @@ def main():
         cmd_add(args)
     elif args.command == "dirs":
         cmd_dirs(args)
+    elif args.command == "update":
+        cmd_update(args)
     elif args.command == "install":
         from .install import cmd_install
         cmd_install(args)
@@ -325,7 +357,45 @@ def main():
         from .install import cmd_uninstall
         cmd_uninstall(args)
     else:
+        # Bare `skill-search`: help plus the active catalog dirs.
         parser.print_help()
+        print()
+        cmd_dirs(args)
+
+
+def _installed_version() -> str | None:
+    """Version of the installed `agent-skill-search` dist, if any."""
+    for name in ("agent-skill-search", "skill-search"):
+        try:
+            return _pkg_version(name)
+        except PackageNotFoundError:
+            continue
+    return None
+
+
+def cmd_update(args):
+    """Upgrade the tool: uv tool > pipx > pip, first one found wins."""
+    runners = [
+        (["uv", "tool", "upgrade", "agent-skill-search"], "uv tool upgrade agent-skill-search"),
+        (["pipx", "upgrade", "agent-skill-search"], "pipx upgrade agent-skill-search"),
+        ([sys.executable, "-m", "pip", "install", "--upgrade", "agent-skill-search"],
+         f"{sys.executable} -m pip install --upgrade agent-skill-search"),
+    ]
+    for argv, label in runners:
+        if shutil.which(argv[0]) is None:
+            continue
+        current = _installed_version()
+        print(f"Current version: {current or __version__} (running {__version__})")
+        print(f"Running: {label}")
+        if getattr(args, "check", False):
+            print("--check: not installing anything.")
+            return
+        result = subprocess.run(argv)
+        sys.exit(result.returncode)
+    print("Error: no installer found (looked for uv, pipx, pip).", file=sys.stderr)
+    print("Install manually: pip install --upgrade agent-skill-search", file=sys.stderr)
+    sys.exit(1)
+
 
 if __name__ == "__main__":
     main()
