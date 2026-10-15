@@ -9,12 +9,6 @@ Portable skill catalog search for AI agents. MCP server + CLI so agents fetch sk
 
 Skills folders eat your agent's context window — every `SKILL.md` loads whether the task needs it or not. Move them into a catalog and the agent fetches a skill only when it is relevant. Search with grep-like terms to find the right skill for the task.
 
-## Demo
-
-![Demo](./docs/screenshot.png)
-
-> Screenshot to be added — shows `skill-search search "react performance"` returning ranked skills with descriptions. Replace `docs/screenshot.png` with a real capture.
-
 ## Install
 
 ```bash
