@@ -1,8 +1,6 @@
 """Installer tests against a fake home: JSON merge, backups, dry-run, argv generation."""
 
 import json
-import os
-import subprocess
 import sys
 
 import pytest
@@ -152,7 +150,7 @@ def test_uninstall_removes_entry_keeps_siblings(tmp_path, monkeypatch):
 def test_claude_desktop_appdata_path(tmp_path, monkeypatch):
     _fake_home(tmp_path, monkeypatch)
     import sys as _sys
-    from skill_search import clients as cl
+
     from skill_search.clients import get_client
     c = get_client("claude-desktop")
 

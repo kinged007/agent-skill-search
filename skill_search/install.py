@@ -6,17 +6,16 @@ never hand-write their config format. File-backed clients get a JSON merge with
 a backup taken before the first write. --dry-run prints and writes nothing.
 """
 
+import json
 import os
 import re
-import sys
-import json
 import shutil
 import subprocess
+import sys
 from dataclasses import dataclass
 
-from . import clients as cl
+from .clients import CLIENTS, SERVER_NAME, Client, get_client, resolve_config_path
 from .engine import existing_known_dirs, include_known_dirs, read_config_default
-from .clients import SERVER_NAME, CLIENTS, Client, get_client, resolve_config_path
 
 DEFAULT_CATALOG = "~/.agents/skills-catalog"
 
@@ -59,8 +58,8 @@ def resolve_catalog_dirs(explicit: list[str] | None, include_known: bool | None 
         for d in out:
             os.makedirs(d, exist_ok=True)
     if not out:
-        print(f"Error: no catalog directories resolved. "
-              f"Pass --catalog DIR or set SKILL_CATALOG_DIRS.", file=sys.stderr)
+        print("Error: no catalog directories resolved. "
+              "Pass --catalog DIR or set SKILL_CATALOG_DIRS.", file=sys.stderr)
         sys.exit(1)
     return out
 
@@ -493,7 +492,7 @@ def list_clients() -> None:
         print(f"  {c.id:<16} {c.name:<16} {kind}")
         if c.note:
             print(f"  {'':<16} note: {c.note}")
-    print(f"\nUsage: skill-search install <id> [--dry-run] [--catalog DIR ...] [--cli-hint] | --all")
+    print("\nUsage: skill-search install <id> [--dry-run] [--catalog DIR ...] [--cli-hint] | --all")
 
 
 def print_chatgpt_instructions(dirs, dry_run: bool) -> None:

@@ -7,13 +7,10 @@ and builds an FTS5-backed search index for fast relevance queries.
 
 import json
 import os
-import re
 import shlex
 import sqlite3
-import hashlib
+from dataclasses import dataclass
 from pathlib import Path
-from typing import Optional
-from dataclasses import dataclass, asdict
 
 # ── Known agent skills locations ────────────────────────────────────────────
 # Home-relative skills dirs owned by other agent tools. Only existing ones are
@@ -63,7 +60,7 @@ def config_path() -> str:
     base = os.environ.get("XDG_CONFIG_HOME") or os.path.join(os.path.expanduser("~"), ".config")
     return os.path.join(os.path.expanduser(base), CONFIG_DIRNAME, CONFIG_FILENAME)
 
-def read_config_default() -> Optional[str]:
+def read_config_default() -> str | None:
     """Custom default catalog dir, or None when the builtin applies."""
     try:
         with open(config_path(), "r", encoding="utf-8") as f:
@@ -110,7 +107,7 @@ class SkillEntry:
     content: str  # full markdown body (after frontmatter)
 
 
-def parse_skill_md(filepath: str) -> Optional[SkillEntry]:
+def parse_skill_md(filepath: str) -> SkillEntry | None:
     """Parse a SKILL.md file into a SkillEntry."""
     try:
         with open(filepath, "r", encoding="utf-8") as f:
@@ -343,7 +340,7 @@ class SkillIndex:
             for r in rows
         ]
 
-    def get_skill(self, name: str) -> Optional[dict]:
+    def get_skill(self, name: str) -> dict | None:
         """Get a skill by exact name."""
         row = self.conn.execute(
             "SELECT name, description, category, path, content FROM skills WHERE name = ?",

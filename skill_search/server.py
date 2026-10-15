@@ -9,17 +9,16 @@ Universal skill search tool. Exposes three tools:
 Transports: stdio (default) or streamable HTTP (--http, for ChatGPT connectors).
 """
 
+import argparse
+import asyncio
+import json
 import os
 import sys
-import json
-import asyncio
-import argparse
-from typing import Optional
 
 try:
+    from mcp import types
     from mcp.server import Server
     from mcp.server.stdio import stdio_server
-    from mcp import types
 except ImportError:
     print(
         "Error: 'mcp' package not installed.\n"
@@ -30,13 +29,12 @@ except ImportError:
 
 from . import __version__
 from .engine import (
-    build_index,
     SkillIndex,
+    build_index,
     existing_known_dirs,
     include_known_dirs,
     read_config_default,
 )
-
 
 # ── Config ──────────────────────────────────────────────────────────────────
 
@@ -63,7 +61,7 @@ def get_catalog_dirs() -> list[str]:
 # ── Server ──────────────────────────────────────────────────────────────────
 
 app = Server("skill-search", version=__version__)
-_index: Optional[SkillIndex] = None
+_index: SkillIndex | None = None
 
 def get_index() -> SkillIndex:
     global _index

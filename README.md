@@ -1,8 +1,13 @@
 # Agent Skill Search
 
-Portable skill catalog search for AI agents. MCP server + CLI.
+[![CI](https://github.com/kinged007/agent-skill-search/actions/workflows/ci.yml/badge.svg)](https://github.com/kinged007/agent-skill-search/actions/workflows/ci.yml)
+[![PyPI version](https://img.shields.io/pypi/v/agent-skill-search)](https://pypi.org/project/agent-skill-search/)
+[![Python 3.10+](https://img.shields.io/pypi/pyversions/agent-skill-search)](https://pypi.org/project/agent-skill-search/)
+[![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 
-Skills folders eat your agent's context window — every SKILL.md loads whether the task needs it or not. Move them into a catalog and the agent fetches a skill only when it's relevant. Use grep-like search terms to find the right one for your task.
+Portable skill catalog search for AI agents. MCP server + CLI so agents fetch skills only when relevant instead of loading every `SKILL.md` into the context window.
+
+Skills folders eat your agent's context window — every `SKILL.md` loads whether the task needs it or not. Move them into a catalog and the agent fetches a skill only when it is relevant. Search with grep-like terms to find the right skill for the task.
 
 ## Install
 
@@ -13,8 +18,7 @@ uv tool install agent-skill-search
 pip install agent-skill-search
 ```
 
-> The PyPI distribution is **`agent-skill-search`** — the name `skill-search` on PyPI
-> belongs to an unrelated package. The commands stay `skill-search` and `skill-search-mcp`.
+> The PyPI distribution is **`agent-skill-search`** — the name `skill-search` on PyPI belongs to an unrelated package. The commands stay `skill-search` and `skill-search-mcp`.
 
 ## Usage
 
@@ -22,8 +26,8 @@ pip install agent-skill-search
 
 ```bash
 skill-search --version               # show version
-skill-search update                # upgrade to the latest release
-skill-search update --check        # show current version only
+skill-search update                  # upgrade to the latest release
+skill-search update --check          # show current version only
 
 # Shorthand: `skill-search "<query>"` == `skill-search search "<query>"`.
 skill-search "react performance"
@@ -62,16 +66,29 @@ One command installs it into your client:
 skill-search install claude-code   # or opencode / codex / gemini / openclaw / hermes / pi / claude-desktop / chatgpt
 ```
 
-See **[INSTALL.md](INSTALL.md)** for per-client details, manual config snippets, the
-ChatGPT remote-HTTP setup, and troubleshooting.
+See **[INSTALL.md](INSTALL.md)** for per-client details, manual config snippets, the ChatGPT remote-HTTP setup, and troubleshooting.
 
-Agents without an MCP connection can use the CLI directly. Opt in to append a
-short usage snippet to existing `CLAUDE.md`/`AGENTS.md` files (marker-checked,
-append-only, never created from scratch):
+Agents without an MCP connection can use the CLI directly. Opt in to append a short usage snippet to existing `CLAUDE.md`/`AGENTS.md` files (marker-checked, append-only, never created from scratch):
 
 ```bash
 skill-search install gemini --cli-hint
 ```
+
+## How it is tested
+
+```bash
+pip install ".[dev]"
+pip install ruff mypy
+pytest -q
+ruff check .
+mypy skill_search
+```
+
+- `tests/test_dirs.py` — catalog resolution and config persistence.
+- `tests/test_install.py` — client install adapters.
+- `tests/test_server_smoke.py` — end-to-end MCP stdio and HTTP round-trips against `test-catalog/`.
+
+CI runs the same checks on every push and PR to `main` (Python 3.10 and 3.12): `pytest`, `ruff check`, and `mypy`.
 
 ## License
 
