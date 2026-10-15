@@ -36,8 +36,8 @@ The catalog dir defaults to `~/.agents/skills-catalog`; add local skills with `s
 
 ## Permissions
 
-- Read `docs/03-tenantflex.md` in the profile workspace for context: do not publish code derived from the private `tenantflex` org without written approval from the org owner.
-- No secrets in commits. Do not copy `.env` or tokens into docs.
+- Do not commit secrets (API keys, tokens, .env). Only .env.example belongs in the repo.
+- This repo is self-contained. Do not add network calls in tests; mock external services.
 
 ## Commit authorship
 
