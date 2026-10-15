@@ -19,21 +19,19 @@ agent skills locations (opencode, claude, codex, ...). Same-named skills
 are deduplicated, first dir wins.
 """
 
-import os
-import sys
-import json
-import shutil
 import argparse
+import json
+import os
+import shutil
 import subprocess
-from importlib.metadata import PackageNotFoundError, version as _pkg_version
-from pathlib import Path
+import sys
+from importlib.metadata import PackageNotFoundError
+from importlib.metadata import version as _pkg_version
 
 from . import __version__
-
 from .engine import (
     KNOWN_SKILL_DIRS,
     build_index,
-    SkillIndex,
     clear_config_default,
     config_path,
     existing_known_dirs,
@@ -67,7 +65,7 @@ def get_default_dirs() -> list[str]:
     return [os.path.expanduser(d) for d in candidates if os.path.isdir(os.path.expanduser(d))]
 
 
-def get_catalog_dirs(extra: str = None, include_known: bool = False) -> list[str]:
+def get_catalog_dirs(extra: str | None = None, include_known: bool = False) -> list[str]:
     """Resolve catalog directories. Explicit dirs (or defaults) first, then known."""
     dirs = []
 

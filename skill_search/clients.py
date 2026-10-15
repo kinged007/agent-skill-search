@@ -11,7 +11,7 @@ Pure data plus path resolution — all I/O lives in install.py.
 
 import os
 import sys
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 
 SERVER_NAME = "skill-search"
 

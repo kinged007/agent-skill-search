@@ -3,8 +3,8 @@
 import json
 import os
 
-import skill_search.cli as cli
 import skill_search.install as inst
+from skill_search import cli
 from skill_search.engine import config_path, read_config_default
 
 
